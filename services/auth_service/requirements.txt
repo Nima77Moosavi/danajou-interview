@@ -1,0 +1,13 @@
+fastapi
+uvicorn
+sqlalchemy
+asyncpg
+alembic
+pydantic-settings
+python-jose
+passlib[bcrypt]
+python-multipart
+httpx
+aio-pika
+psycopg2-binary
+greenlet

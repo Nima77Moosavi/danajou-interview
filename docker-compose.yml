@@ -42,38 +42,41 @@ services:
     ports:
       - "8000:8000"
 
-    depends_on:
-      - postgres
-      - rabbitmq
-
-
-  transport_service:
-    build: ./services/transport_service
-
-    container_name: transport_service
+    volumes:
+      - ./services/auth_service:/app
 
     depends_on:
       - postgres
       - rabbitmq
 
 
-  reservation_service:
-    build: ./services/reservation_service
+  # transport_service:
+  #   build: ./services/transport_service
 
-    container_name: reservation_service
+  #   container_name: transport_service
 
-    depends_on:
-      - postgres
-      - rabbitmq
+  #   depends_on:
+  #     - postgres
+  #     - rabbitmq
 
 
-  notification_service:
-    build: ./services/notification_service
+  # reservation_service:
+  #   build: ./services/reservation_service
 
-    container_name: notification_service
+  #   container_name: reservation_service
 
-    depends_on:
-      - rabbitmq
+  #   depends_on:
+  #     - postgres
+  #     - rabbitmq
+
+
+  # notification_service:
+  #   build: ./services/notification_service
+
+  #   container_name: notification_service
+
+  #   depends_on:
+  #     - rabbitmq
 
 
 volumes:

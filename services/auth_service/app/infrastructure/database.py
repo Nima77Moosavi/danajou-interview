@@ -1,4 +1,5 @@
 from typing import AsyncGenerator
+from pathlib import Path
 
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
@@ -10,8 +11,14 @@ from pydantic_settings import BaseSettings
 class Settings(BaseSettings):
     DATABASE_URL: str
 
+    RABBITMQ_URL: str
+
+    JWT_SECRET_KEY: str
+    JWT_ALGORITHM: str
+    ACCESS_TOKEN_EXPIRE_MINUTES: int
+
     class Config:
-        env_file = ".env"
+        env_file = Path(__file__).resolve().parents[2]/".env"
 
 
 settings = Settings()
