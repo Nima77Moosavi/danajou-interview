@@ -4,11 +4,5 @@ sqlalchemy
 asyncpg
 alembic
 pydantic-settings
-python-jose
-passlib[bcrypt]
-bcrypt==4.0.1
-python-multipart
-httpx
-aio-pika
 psycopg2-binary
 greenlet
