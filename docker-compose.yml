@@ -69,23 +69,23 @@ services:
       - rabbitmq
 
 
-  # reservation_service:
-  #   build: ./services/reservation_service
+  reservation_service:
+    build: ./services/reservation_service
 
-  #   container_name: reservation_service
+    container_name: reservation_service
 
-  #   depends_on:
-  #     - postgres
-  #     - rabbitmq
+    env_file:
+      - ./services/reservation_service/.env
 
+    ports:
+      - "8002:8000"
 
-  # notification_service:
-  #   build: ./services/notification_service
+    volumes:
+      - ./services/reservation_service:/app
 
-  #   container_name: notification_service
-
-  #   depends_on:
-  #     - rabbitmq
+    depends_on:
+      - postgres
+      - rabbitmq
 
 
 volumes:
