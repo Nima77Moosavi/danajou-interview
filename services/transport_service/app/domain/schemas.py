@@ -1,9 +1,9 @@
-from datetime import datetime
+from datetime import date, datetime
 from uuid import UUID
 
 from pydantic import BaseModel
 
-from app.domain.enums import UserRole, SeatGenderType, ReservationStatus
+from app.domain.enums import SeatGenderType, SeatHoldStatus, UserRole
 
 
 class CompanyCreateRequest(BaseModel):
@@ -77,25 +77,14 @@ class TripResponse(BaseModel):
 class CurrentUser(BaseModel):
     user_id: UUID
     role: UserRole
+    gender: SeatGenderType | None = None
 
 
-class ReservationCreateRequest(BaseModel):
-    trip_id: UUID
-    seat_id: UUID
-    
+class SeatUpdateRequest(BaseModel):
+    is_reservable: bool | None = None
+    gender_type: SeatGenderType | None = None
 
-class ReservationResponse(BaseModel):
-    id: UUID
-    passenger_id: UUID
-    trip_id: UUID
-    seat_id: UUID
-    status: ReservationStatus
-    reserved_at: datetime
 
-    model_config = {
-        "from_attributes": True
-    }
-    
 class TripSeatResponse(BaseModel):
     seat_id: UUID
     seat_number: int
@@ -104,3 +93,39 @@ class TripSeatResponse(BaseModel):
     model_config = {
         "from_attributes": True
     }
+
+
+class InternalTripResponse(BaseModel):
+    id: UUID
+    origin: str
+    destination: str
+    departure_time: datetime
+    arrival_time: datetime
+    price: int
+    bus_id: UUID
+    company_name: str
+    remaining_capacity: int
+
+
+class InternalSeatHoldRequest(BaseModel):
+    reservation_id: UUID
+    passenger_gender: SeatGenderType
+    trip_id: UUID
+    seat_id: UUID
+
+
+class InternalSeatHoldResponse(BaseModel):
+    reservation_id: UUID
+    trip_id: UUID
+    seat_id: UUID
+    status: SeatHoldStatus
+    seat_gender_type: SeatGenderType
+    remaining_capacity: int
+
+    model_config = {
+        "from_attributes": True
+    }
+
+
+class InternalSeatHoldUpdateRequest(BaseModel):
+    status: SeatHoldStatus

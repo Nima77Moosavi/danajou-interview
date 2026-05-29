@@ -1,92 +1,189 @@
 services:
-
-  postgres:
+  auth_db:
     image: postgres:16
-
-    container_name: bus_postgres
-
     environment:
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: postgres
-
+      POSTGRES_DB: auth_db
     ports:
-      - "5432:5432"
-
+      - "5433:5432"
     volumes:
-      - postgres_data:/var/lib/postgresql/data
-      - ./postgres/init.sql:/docker-entrypoint-initdb.d/init.sql
+      - auth_db_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d auth_db"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
 
+  transport_db:
+    image: postgres:16
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: transport_db
+    ports:
+      - "5434:5432"
+    volumes:
+      - transport_db_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d transport_db"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  reservation_db:
+    image: postgres:16
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: reservation_db
+    ports:
+      - "5435:5432"
+    volumes:
+      - reservation_db_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d reservation_db"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  search_db:
+    image: postgres:16
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: search_db
+    ports:
+      - "5436:5432"
+    volumes:
+      - search_db_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d search_db"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  notification_db:
+    image: postgres:16
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: notification_db
+    ports:
+      - "5437:5432"
+    volumes:
+      - notification_db_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d notification_db"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
 
   rabbitmq:
     image: rabbitmq:3-management
-
-    container_name: bus_rabbitmq
-
     ports:
       - "5672:5672"
       - "15672:15672"
-
     environment:
       RABBITMQ_DEFAULT_USER: guest
       RABBITMQ_DEFAULT_PASS: guest
-
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
 
   auth_service:
     build: ./services/auth_service
-
-    container_name: auth_service
-
-    env_file:
-      - ./services/auth_service/.env
-
+    environment:
+      DATABASE_URL: postgresql+asyncpg://postgres:postgres@auth_db:5432/auth_db
+      RABBITMQ_URL: amqp://guest:guest@rabbitmq:5672/
+      JWT_SECRET_KEY: supersecretkey
+      JWT_ALGORITHM: HS256
+      ACCESS_TOKEN_EXPIRE_MINUTES: 60
+      NOTIFICATION_SERVICE_URL: http://notification_service:8000
+      NOTIFICATION_SERVICE_USERNAME: auth_service
+      NOTIFICATION_SERVICE_PASSWORD: auth-secret
+      SERVICE_CREDENTIALS: transport_service:transport-secret,reservation_service:reservation-secret,search_service:search-secret,notification_service:notification-secret
     ports:
       - "8000:8000"
-
-    volumes:
-      - ./services/auth_service:/app
-
     depends_on:
-      - postgres
-      - rabbitmq
-
+      auth_db:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
 
   transport_service:
     build: ./services/transport_service
-
-    container_name: transport_service
-
-    env_file:
-      - ./services/transport_service/.env
-
+    environment:
+      DATABASE_URL: postgresql+asyncpg://postgres:postgres@transport_db:5432/transport_db
+      RABBITMQ_URL: amqp://guest:guest@rabbitmq:5672/
+      JWT_SECRET_KEY: supersecretkey
+      JWT_ALGORITHM: HS256
+      ACCESS_TOKEN_EXPIRE_MINUTES: 60
+      SERVICE_CREDENTIALS: search_service:search-secret,reservation_service:reservation-secret
     ports:
       - "8001:8000"
-
-    volumes:
-      - ./services/transport_service:/app
-
     depends_on:
-      - postgres
-      - rabbitmq
+      transport_db:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
 
+  search_service:
+    build: ./services/search_service
+    environment:
+      DATABASE_URL: postgresql+asyncpg://postgres:postgres@search_db:5432/search_db
+      TRANSPORT_SERVICE_URL: http://transport_service:8000
+      TRANSPORT_SERVICE_USERNAME: search_service
+      TRANSPORT_SERVICE_PASSWORD: search-secret
+    ports:
+      - "8002:8000"
+    depends_on:
+      search_db:
+        condition: service_healthy
+      transport_service:
+        condition: service_started
 
   reservation_service:
     build: ./services/reservation_service
-
-    container_name: reservation_service
-
-    env_file:
-      - ./services/reservation_service/.env
-
+    environment:
+      DATABASE_URL: postgresql+asyncpg://postgres:postgres@reservation_db:5432/reservation_db
+      RABBITMQ_URL: amqp://guest:guest@rabbitmq:5672/
+      JWT_SECRET_KEY: supersecretkey
+      JWT_ALGORITHM: HS256
+      ACCESS_TOKEN_EXPIRE_MINUTES: 60
+      TRANSPORT_SERVICE_URL: http://transport_service:8000
+      TRANSPORT_SERVICE_USERNAME: reservation_service
+      TRANSPORT_SERVICE_PASSWORD: reservation-secret
     ports:
-      - "8002:8000"
-
-    volumes:
-      - ./services/reservation_service:/app
-
+      - "8003:8000"
     depends_on:
-      - postgres
-      - rabbitmq
+      reservation_db:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+      transport_service:
+        condition: service_started
 
+  notification_service:
+    build: ./services/notification_service
+    environment:
+      DATABASE_URL: postgresql+asyncpg://postgres:postgres@notification_db:5432/notification_db
+      RABBITMQ_URL: amqp://guest:guest@rabbitmq:5672/
+      OTP_EXPIRE_MINUTES: 5
+      SERVICE_CREDENTIALS: auth_service:auth-secret
+    ports:
+      - "8004:8000"
+    depends_on:
+      notification_db:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
 
 volumes:
-  postgres_data:
+  auth_db_data:
+  transport_db_data:
+  reservation_db_data:
+  search_db_data:
+  notification_db_data:

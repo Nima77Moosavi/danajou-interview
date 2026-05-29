@@ -1,0 +1,10 @@
+fastapi
+uvicorn
+sqlalchemy
+asyncpg
+alembic
+pydantic-settings
+httpx
+aio-pika
+psycopg2-binary
+greenlet

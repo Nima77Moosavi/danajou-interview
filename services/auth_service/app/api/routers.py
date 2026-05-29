@@ -6,17 +6,24 @@ from fastapi import (
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.domain.schemas import (
+    LoginRequest,
+    MessageResponse,
+    OTPRequest,
+    OTPVerifyRequest,
+    TokenResponse,
     UserRegisterRequest,
     UserResponse,
-    LoginRequest,
-    TokenResponse,
 )
 from app.infrastructure.models import User
 
 from app.domain.services import AuthService
 
 from app.infrastructure.database import get_db
-from app.api.deps import get_auth_service, get_current_user
+from app.api.deps import (
+    get_auth_service,
+    get_current_user,
+    require_service_auth,
+)
 
 
 router = APIRouter(
@@ -50,6 +57,31 @@ async def login(
     return await auth_service.login(data)
 
 
+@router.post(
+    "/otp/request",
+    response_model=MessageResponse,
+    status_code=202,
+)
+async def request_otp(
+    data: OTPRequest,
+    auth_service: AuthService = Depends(get_auth_service),
+):
+    await auth_service.request_otp(data)
+
+    return MessageResponse(detail="OTP requested")
+
+
+@router.post(
+    "/otp/verify",
+    response_model=TokenResponse,
+)
+async def verify_otp(
+    data: OTPVerifyRequest,
+    auth_service: AuthService = Depends(get_auth_service),
+):
+    return await auth_service.verify_otp(data)
+
+
 @router.get(
     "/me",
     response_model=UserResponse,
@@ -59,3 +91,13 @@ async def me(
 ):
 
     return current_user
+
+
+@router.get("/internal/basic/validate")
+async def validate_basic_auth(
+    service_name: str = Depends(require_service_auth),
+):
+    return {
+        "service": service_name,
+        "valid": True,
+    }

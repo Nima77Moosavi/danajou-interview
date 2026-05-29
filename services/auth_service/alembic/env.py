@@ -4,7 +4,7 @@ from sqlalchemy import engine_from_config, pool
 
 from alembic import context
 
-from app.infrastructure.database import Base
+from app.infrastructure.database import Base, settings
 from app.infrastructure.models import User
 
 
@@ -16,6 +16,11 @@ if config.config_file_name is not None:
 
 
 target_metadata = Base.metadata
+
+config.set_main_option(
+    "sqlalchemy.url",
+    settings.DATABASE_URL.replace("+asyncpg", ""),
+)
 
 
 def run_migrations_offline() -> None:

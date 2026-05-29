@@ -1,38 +1,41 @@
+import logging
+from uuid import UUID
+
 from fastapi import HTTPException, status
 
-from app.domain.interfaces import (
-    ITransportRepository,
-)
-
+from app.domain.enums import SeatGenderType, SeatHoldStatus, UserRole
+from app.domain.interfaces import ITransportRepository
 from app.domain.schemas import (
-    CurrentUser,
-    CompanyCreateRequest,
     BusCreateRequest,
+    CompanyCreateRequest,
+    CurrentUser,
+    InternalSeatHoldRequest,
+    InternalSeatHoldResponse,
+    InternalTripResponse,
+    SeatUpdateRequest,
     TripCreateRequest,
-    ReservationCreateRequest
 )
+from app.infrastructure.messaging import RabbitMQEventBus
 
-from app.domain.enums import UserRole
+
+logger = logging.getLogger(__name__)
 
 
 class TransportService:
     def __init__(
         self,
         repository: ITransportRepository,
+        event_bus: RabbitMQEventBus | None = None,
     ):
         self.repository = repository
+        self.event_bus = event_bus or RabbitMQEventBus()
 
     async def create_company(
         self,
         current_user: CurrentUser,
         data: CompanyCreateRequest,
     ):
-
-        if current_user.role != UserRole.TRANSPORT_OWNER:
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail="Only transport owners can create companies",
-            )
+        self._require_transport_owner(current_user)
 
         existing_company = await self.repository.get_company_by_owner(
             current_user.user_id
@@ -44,20 +47,23 @@ class TransportService:
                 detail="Owner already has a company",
             )
 
-        return await self.repository.create_company(
+        company = await self.repository.create_company(
             owner_id=current_user.user_id,
             data=data,
         )
+
+        logger.info("transport company created", extra={"company_id": company.id})
+
+        return company
 
     async def create_bus(
         self,
         current_user: CurrentUser,
         data: BusCreateRequest,
     ):
+        self._require_transport_owner(current_user)
 
-        company = await self.repository.get_company_by_id(
-            data.company_id
-        )
+        company = await self.repository.get_company_by_id(data.company_id)
 
         if not company:
             raise HTTPException(
@@ -71,17 +77,20 @@ class TransportService:
                 detail="You do not own this company",
             )
 
-        return await self.repository.create_bus(data)
+        bus = await self.repository.create_bus(data)
+
+        logger.info("bus created", extra={"bus_id": bus.id})
+
+        return bus
 
     async def create_trip(
         self,
         current_user: CurrentUser,
         data: TripCreateRequest,
     ):
+        self._require_transport_owner(current_user)
 
-        bus = await self.repository.get_bus_by_id(
-            data.bus_id
-        )
+        bus = await self.repository.get_bus_by_id(data.bus_id)
 
         if not bus:
             raise HTTPException(
@@ -89,29 +98,108 @@ class TransportService:
                 detail="Bus not found",
             )
 
-        company = bus.company
-
-        if company.owner_id != current_user.user_id:
+        if bus.company.owner_id != current_user.user_id:
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="You do not own this bus",
             )
 
-        return await self.repository.create_trip(data)
+        trip = await self.repository.create_trip(data)
+        await self.event_bus.publish(
+            "trip.created",
+            {
+                "trip_id": str(trip.id),
+                "bus_id": str(trip.bus_id),
+                "origin": trip.origin,
+                "destination": trip.destination,
+                "departure_time": trip.departure_time,
+            },
+        )
 
-    async def list_trips(
-        self,
-    ):
+        logger.info("trip created", extra={"trip_id": trip.id})
+
+        return trip
+
+    async def list_trips(self):
         return await self.repository.list_trips()
 
-    async def create_reservation(
+    async def update_seat(
         self,
         current_user: CurrentUser,
-        data: ReservationCreateRequest,
+        seat_id: UUID,
+        data: SeatUpdateRequest,
     ):
-        trip = await self.repository.get_trip_by_id(
-            data.trip_id
+        self._require_transport_owner(current_user)
+
+        seat = await self.repository.get_seat_by_id(seat_id)
+
+        if not seat:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Seat not found",
+            )
+
+        bus = await self.repository.get_bus_by_id(seat.bus_id)
+
+        if not bus or bus.company.owner_id != current_user.user_id:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="You do not own this seat",
+            )
+
+        updated = await self.repository.update_seat(seat, data)
+        await self.event_bus.publish(
+            "seat.updated",
+            {
+                "seat_id": str(updated.id),
+                "bus_id": str(updated.bus_id),
+                "is_reservable": updated.is_reservable,
+                "gender_type": updated.gender_type.value,
+            },
         )
+
+        logger.info("seat updated", extra={"seat_id": updated.id})
+
+        return updated
+
+    async def search_trips(
+        self,
+        origin,
+        destination,
+        departure_date,
+    ) -> list[InternalTripResponse]:
+        trips = await self.repository.search_trips(
+            origin=origin,
+            destination=destination,
+            departure_date=departure_date,
+        )
+
+        responses: list[InternalTripResponse] = []
+
+        for trip in trips:
+            responses.append(
+                InternalTripResponse(
+                    id=trip.id,
+                    origin=trip.origin,
+                    destination=trip.destination,
+                    departure_time=trip.departure_time,
+                    arrival_time=trip.arrival_time,
+                    price=trip.price,
+                    bus_id=trip.bus_id,
+                    company_name=trip.bus.company.name,
+                    remaining_capacity=await self.repository.count_remaining_capacity(
+                        trip
+                    ),
+                )
+            )
+
+        return responses
+
+    async def hold_seat(
+        self,
+        data: InternalSeatHoldRequest,
+    ) -> InternalSeatHoldResponse:
+        trip = await self.repository.get_trip_by_id(data.trip_id)
 
         if not trip:
             raise HTTPException(
@@ -119,9 +207,7 @@ class TransportService:
                 detail="Trip not found",
             )
 
-        seat = await self.repository.get_seat_by_id(
-            data.seat_id
-        )
+        seat = await self.repository.get_seat_by_id(data.seat_id)
 
         if not seat:
             raise HTTPException(
@@ -141,18 +227,101 @@ class TransportService:
                 detail="Seat is not reservable",
             )
 
-        existing_reservation = await self.repository.get_reservation(
-            trip_id=data.trip_id,
-            seat_id=data.seat_id,
-        )
-
-        if existing_reservation:
+        if (
+            seat.gender_type != SeatGenderType.NONE
+            and seat.gender_type != data.passenger_gender
+        ):
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Seat already reserved",
+                detail="Passenger gender does not match seat restriction",
             )
 
-        return await self.repository.create_reservation(
-            passenger_id=current_user.user_id,
-            data=data,
+        for hold in trip.holds:
+            if (
+                hold.seat_id == data.seat_id
+                and hold.status in {SeatHoldStatus.HELD, SeatHoldStatus.CONFIRMED}
+            ):
+                raise HTTPException(
+                    status_code=status.HTTP_409_CONFLICT,
+                    detail="Seat is already held",
+                )
+
+        hold = await self.repository.create_seat_hold(data)
+        trip = await self.repository.get_trip_by_id(data.trip_id)
+
+        await self.event_bus.publish(
+            "seat.held",
+            {
+                "reservation_id": str(hold.reservation_id),
+                "trip_id": str(hold.trip_id),
+                "seat_id": str(hold.seat_id),
+            },
         )
+
+        logger.info("seat held", extra={"reservation_id": hold.reservation_id})
+
+        return InternalSeatHoldResponse(
+            reservation_id=hold.reservation_id,
+            trip_id=hold.trip_id,
+            seat_id=hold.seat_id,
+            status=hold.status,
+            seat_gender_type=seat.gender_type,
+            remaining_capacity=await self.repository.count_remaining_capacity(trip),
+        )
+
+    async def update_seat_hold_status(
+        self,
+        reservation_id: UUID,
+        hold_status: SeatHoldStatus,
+    ) -> InternalSeatHoldResponse:
+        hold = await self.repository.get_seat_hold_by_reservation_id(
+            reservation_id
+        )
+
+        if not hold:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Seat hold not found",
+            )
+
+        hold = await self.repository.update_seat_hold_status(
+            hold,
+            hold_status,
+        )
+        trip = await self.repository.get_trip_by_id(hold.trip_id)
+        seat = await self.repository.get_seat_by_id(hold.seat_id)
+
+        await self.event_bus.publish(
+            f"seat_hold.{hold.status.value}",
+            {
+                "reservation_id": str(hold.reservation_id),
+                "trip_id": str(hold.trip_id),
+                "seat_id": str(hold.seat_id),
+                "status": hold.status.value,
+            },
+        )
+
+        logger.info(
+            "seat hold status changed",
+            extra={
+                "reservation_id": hold.reservation_id,
+                "status": hold.status.value,
+            },
+        )
+
+        return InternalSeatHoldResponse(
+            reservation_id=hold.reservation_id,
+            trip_id=hold.trip_id,
+            seat_id=hold.seat_id,
+            status=hold.status,
+            seat_gender_type=seat.gender_type,
+            remaining_capacity=await self.repository.count_remaining_capacity(trip),
+        )
+
+    @staticmethod
+    def _require_transport_owner(current_user: CurrentUser) -> None:
+        if current_user.role != UserRole.TRANSPORT_OWNER:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Only transport owners can manage transport resources",
+            )

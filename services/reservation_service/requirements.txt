@@ -8,3 +8,4 @@ python-jose
 httpx
 psycopg2-binary
 greenlet
+aio-pika

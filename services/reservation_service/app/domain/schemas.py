@@ -8,6 +8,7 @@ from app.domain.enums import ReservationStatus
 class CurrentUser(BaseModel):
     user_id: UUID
     role: str
+    gender: str
 
 
 class ReservationCreateRequest(BaseModel):
@@ -16,7 +17,9 @@ class ReservationCreateRequest(BaseModel):
 
 
 class ReservationResponse(BaseModel):
+    id: UUID
     passenger_id: UUID
+    passenger_gender: str
     trip_id: UUID
     seat_id: UUID
     status: ReservationStatus
@@ -25,3 +28,7 @@ class ReservationResponse(BaseModel):
     model_config = {
         "from_attributes": True
     }
+
+
+class MessageResponse(BaseModel):
+    detail: str

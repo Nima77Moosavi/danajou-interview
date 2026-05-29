@@ -24,7 +24,7 @@ from app.infrastructure.database import Base
 
 from app.domain.enums import (
     SeatGenderType,
-    ReservationStatus,
+    SeatHoldStatus,
 )
 
 
@@ -151,7 +151,7 @@ class Seat(Base):
         back_populates="seats",
     )
 
-    reservations: Mapped[list["Reservation"]] = relationship(
+    holds: Mapped[list["SeatHold"]] = relationship(
         back_populates="seat",
         cascade="all, delete-orphan",
     )
@@ -202,7 +202,7 @@ class Trip(Base):
         back_populates="trips",
     )
 
-    reservations: Mapped[list["Reservation"]] = relationship(
+    holds: Mapped[list["SeatHold"]] = relationship(
         back_populates="trip",
         cascade="all, delete-orphan",
     )
@@ -213,16 +213,8 @@ class Trip(Base):
     )
 
 
-class Reservation(Base):
-    __tablename__ = "reservations"
-
-    __table_args__ = (
-        UniqueConstraint(
-            "trip_id",
-            "seat_id",
-            name="uq_trip_seat",
-        ),
-    )
+class SeatHold(Base):
+    __tablename__ = "seat_holds"
 
     id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True),
@@ -230,9 +222,10 @@ class Reservation(Base):
         default=uuid.uuid4,
     )
 
-    passenger_id: Mapped[uuid.UUID] = mapped_column(
+    reservation_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True),
         nullable=False,
+        unique=True,
         index=True,
     )
 
@@ -246,25 +239,31 @@ class Reservation(Base):
         nullable=False,
     )
 
-    status: Mapped[ReservationStatus] = mapped_column(
+    status: Mapped[SeatHoldStatus] = mapped_column(
         Enum(
-            ReservationStatus,
+            SeatHoldStatus,
             native_enum=False,
             length=20,
         ),
-        default=ReservationStatus.RESERVED,
+        default=SeatHoldStatus.HELD,
         nullable=False,
     )
 
-    reserved_at: Mapped[datetime] = mapped_column(
+    created_at: Mapped[datetime] = mapped_column(
         DateTime,
         server_default=func.now(),
     )
 
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime,
+        server_default=func.now(),
+        onupdate=func.now(),
+    )
+
     trip: Mapped["Trip"] = relationship(
-        back_populates="reservations",
+        back_populates="holds",
     )
 
     seat: Mapped["Seat"] = relationship(
-        back_populates="reservations",
+        back_populates="holds",
     )

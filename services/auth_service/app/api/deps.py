@@ -1,5 +1,7 @@
 from uuid import UUID
 
+from fastapi.security import HTTPBasic, HTTPBasicCredentials
+
 from jose import JWTError
 
 from fastapi import (
@@ -20,6 +22,7 @@ from app.infrastructure.repositories import UserRepository
 from app.domain.services import AuthService
 
 from app.infrastructure.security import decode_access_token
+from app.infrastructure.security import validate_service_credentials
 from app.infrastructure.models import User
 
 
@@ -33,6 +36,7 @@ async def get_auth_service(
 
 
 security = HTTPBearer()
+service_security = HTTPBasic()
 
 
 async def get_current_user(
@@ -55,7 +59,7 @@ async def get_current_user(
         if user_id is None:
             raise credentials_exception
 
-    except JWTError:
+    except (JWTError, ValueError):
         raise credentials_exception
 
     user_repository = UserRepository(db)
@@ -68,3 +72,19 @@ async def get_current_user(
         raise credentials_exception
 
     return user
+
+
+async def require_service_auth(
+    credentials: HTTPBasicCredentials = Depends(service_security),
+) -> str:
+    if not validate_service_credentials(
+        credentials.username,
+        credentials.password,
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid service credentials",
+            headers={"WWW-Authenticate": "Basic"},
+        )
+
+    return credentials.username

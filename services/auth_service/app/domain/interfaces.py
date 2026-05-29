@@ -17,7 +17,7 @@ class IUserRepository(Protocol):
 
     async def create_user(
         self, phone_number: str,
-        password_hash: str,
+        password_hash: str | None,
         gender: UserGender,
         role: UserRole,
         is_active: bool = True

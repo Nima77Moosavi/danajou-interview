@@ -1,24 +1,19 @@
+from datetime import date
 from typing import Protocol
 from uuid import UUID
 
-from app.infrastructure.models import (
-    TransportCompany,
-    Bus,
-    Trip,
-    Reservation,
-    Seat,
-)
-
+from app.domain.enums import SeatHoldStatus
 from app.domain.schemas import (
-    CompanyCreateRequest,
     BusCreateRequest,
+    CompanyCreateRequest,
+    InternalSeatHoldRequest,
+    SeatUpdateRequest,
     TripCreateRequest,
-    ReservationCreateRequest
 )
+from app.infrastructure.models import Bus, Seat, SeatHold, TransportCompany, Trip
 
 
 class ITransportRepository(Protocol):
-
     async def create_company(
         self,
         owner_id: UUID,
@@ -56,8 +51,14 @@ class ITransportRepository(Protocol):
     ) -> Trip:
         ...
 
-    async def list_trips(
+    async def list_trips(self) -> list[Trip]:
+        ...
+
+    async def search_trips(
         self,
+        origin: str | None,
+        destination: str | None,
+        departure_date: date | None,
     ) -> list[Trip]:
         ...
 
@@ -73,16 +74,34 @@ class ITransportRepository(Protocol):
     ) -> Seat | None:
         ...
 
-    async def get_reservation(
+    async def update_seat(
         self,
-        trip_id: UUID,
-        seat_id: UUID,
-    ) -> Reservation | None:
+        seat: Seat,
+        data: SeatUpdateRequest,
+    ) -> Seat:
         ...
 
-    async def create_reservation(
+    async def create_seat_hold(
         self,
-        passenger_id: UUID,
-        data: ReservationCreateRequest,
-    ) -> Reservation:
+        data: InternalSeatHoldRequest,
+    ) -> SeatHold:
+        ...
+
+    async def get_seat_hold_by_reservation_id(
+        self,
+        reservation_id: UUID,
+    ) -> SeatHold | None:
+        ...
+
+    async def update_seat_hold_status(
+        self,
+        hold: SeatHold,
+        status: SeatHoldStatus,
+    ) -> SeatHold:
+        ...
+
+    async def count_remaining_capacity(
+        self,
+        trip: Trip,
+    ) -> int:
         ...

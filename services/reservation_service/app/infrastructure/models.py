@@ -1,13 +1,7 @@
 import uuid
 from datetime import datetime
 
-from sqlalchemy import (
-    Enum,
-    DateTime,
-    ForeignKey,
-    UniqueConstraint,
-    func,
-)
+from sqlalchemy import DateTime, Enum, String, func
 
 from sqlalchemy.orm import (
     Mapped,
@@ -24,18 +18,11 @@ from app.domain.enums import ReservationStatus
 class Reservation(Base):
     __tablename__ = "reservations"
 
-    __table_args__ = (
-        UniqueConstraint(
-            "trip_id",
-            "seat_id",
-            name="uq_trip_seat",
-        ),
-    )
-
     id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     passenger_id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True), index=True,)
+        UUID(as_uuid=True), index=True, nullable=False)
+    passenger_gender: Mapped[str] = mapped_column(String(10), nullable=False)
     trip_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True))
     seat_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True))
 
@@ -51,3 +38,5 @@ class Reservation(Base):
 
     created_at: Mapped[datetime] = mapped_column(
         DateTime, server_default=func.now(),)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime, server_default=func.now(), onupdate=func.now(),)

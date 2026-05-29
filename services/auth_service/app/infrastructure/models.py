@@ -1,12 +1,7 @@
 import uuid
 from datetime import datetime
 
-from sqlalchemy import (
-    String,
-    Boolean,
-    Enum,
-    func,
-)
+from sqlalchemy import Boolean, Enum, String, func
 
 from sqlalchemy.dialects.postgresql import UUID
 
@@ -31,7 +26,10 @@ class User(Base):
         index=True,
         nullable=False,
     )
-    password_hash: Mapped[str] 
+    password_hash: Mapped[str | None] = mapped_column(
+        String(255),
+        nullable=True,
+    )
 
     role: Mapped[UserRole] = mapped_column(
         Enum(UserRole, native_enum=False, length=20),

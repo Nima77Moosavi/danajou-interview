@@ -8,6 +8,7 @@ class UserRole(StrEnum):
 
 
 class SeatGenderType(StrEnum):
+    NONE = "none"
     MALE = "male"
     FEMALE = "female"
 
@@ -15,3 +16,9 @@ class SeatGenderType(StrEnum):
 class ReservationStatus(StrEnum):
     RESERVED = "reserved"
     CANCELLED = "cancelled"
+
+
+class SeatHoldStatus(StrEnum):
+    HELD = "held"
+    CONFIRMED = "confirmed"
+    RELEASED = "released"

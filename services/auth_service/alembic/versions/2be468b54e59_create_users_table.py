@@ -24,7 +24,7 @@ def upgrade() -> None:
     op.create_table('users',
     sa.Column('id', sa.UUID(), nullable=False),
     sa.Column('phone_number', sa.String(length=20), nullable=False),
-    sa.Column('password_hash', sa.String(), nullable=False),
+    sa.Column('password_hash', sa.String(length=255), nullable=True),
     sa.Column('role', sa.Enum('ADMIN', 'PASSENGER', 'TRANSPORT_OWNER', name='userrole', native_enum=False, length=20), nullable=False),
     sa.Column('gender', sa.Enum('MALE', 'FEMALE', name='usergender', native_enum=False, length=10), nullable=False),
     sa.Column('is_active', sa.Boolean(), nullable=False),

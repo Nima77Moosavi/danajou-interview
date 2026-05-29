@@ -1,4 +1,6 @@
-from datetime import datetime, timedelta, UTC
+import secrets
+from datetime import UTC, datetime, timedelta
+
 from fastapi import HTTPException, status
 from jose import jwt, JWTError
 from passlib.context import CryptContext
@@ -26,13 +28,21 @@ def verify_password(
     )
 
 
-def create_access_token(user_id: str) -> str:
+def create_access_token(
+    user_id: str,
+    role: str,
+    gender: str,
+    phone_number: str,
+) -> str:
     expire = datetime.now(UTC) + timedelta(
         minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES
     )
 
     payload = {
         "sub": user_id,
+        "role": role,
+        "gender": gender,
+        "phone_number": phone_number,
         "exp": expire,
     }
 
@@ -59,3 +69,25 @@ def decode_access_token(token: str) -> dict:
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid token",
         )
+
+
+def _configured_service_credentials() -> dict[str, str]:
+    credentials: dict[str, str] = {}
+
+    for item in settings.SERVICE_CREDENTIALS.split(","):
+        if not item.strip() or ":" not in item:
+            continue
+
+        username, password = item.split(":", 1)
+        credentials[username.strip()] = password.strip()
+
+    return credentials
+
+
+def validate_service_credentials(username: str, password: str) -> bool:
+    expected_password = _configured_service_credentials().get(username)
+
+    if expected_password is None:
+        return False
+
+    return secrets.compare_digest(password, expected_password)

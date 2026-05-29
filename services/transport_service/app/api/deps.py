@@ -1,12 +1,18 @@
 from app.domain.schemas import CurrentUser
 from app.infrastructure.security import decode_access_token
+from app.infrastructure.security import validate_service_credentials
 from fastapi import (
     Depends,
     HTTPException,
     status,
 )
 from jose import JWTError
-from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
+from fastapi.security import (
+    HTTPAuthorizationCredentials,
+    HTTPBasic,
+    HTTPBasicCredentials,
+    HTTPBearer,
+)
 from fastapi import Depends
 
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -32,6 +38,7 @@ async def get_transport_service(
 
 
 security = HTTPBearer()
+service_security = HTTPBasic()
 
 
 async def get_current_user(
@@ -50,6 +57,7 @@ async def get_current_user(
 
         user_id = payload.get("sub")
         role = payload.get("role")
+        gender = payload.get("gender")
 
         if not user_id or not role:
             raise credentials_exception
@@ -57,7 +65,24 @@ async def get_current_user(
         return CurrentUser(
             user_id=user_id,
             role=role,
+            gender=gender,
         )
 
-    except JWTError:
+    except (JWTError, ValueError):
         raise credentials_exception
+
+
+async def require_service_auth(
+    credentials: HTTPBasicCredentials = Depends(service_security),
+) -> str:
+    if not validate_service_credentials(
+        credentials.username,
+        credentials.password,
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid service credentials",
+            headers={"WWW-Authenticate": "Basic"},
+        )
+
+    return credentials.username

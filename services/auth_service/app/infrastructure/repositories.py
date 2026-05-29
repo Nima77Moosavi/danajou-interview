@@ -33,8 +33,9 @@ class UserRepository(IUserRepository):
         return result.scalar_one_or_none()
 
     async def create_user(
-        self, phone_number: str,
-        password_hash: str,
+        self,
+        phone_number: str,
+        password_hash: str | None,
         gender: UserGender,
         role: UserRole,
         is_active: bool = True
