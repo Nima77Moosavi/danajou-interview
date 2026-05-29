@@ -5,7 +5,6 @@ WORKDIR /app
 COPY requirements.txt .
 
 RUN pip install --no-cache-dir \
-    -i https://mirror-pypi.runflare.com/simple \
     -r requirements.txt
 
 COPY . .
