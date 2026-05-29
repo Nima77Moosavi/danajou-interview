@@ -50,14 +50,23 @@ services:
       - rabbitmq
 
 
-  # transport_service:
-  #   build: ./services/transport_service
+  transport_service:
+    build: ./services/transport_service
 
-  #   container_name: transport_service
+    container_name: transport_service
 
-  #   depends_on:
-  #     - postgres
-  #     - rabbitmq
+    env_file:
+      - ./services/transport_service/.env
+
+    ports:
+      - "8001:8000"
+
+    volumes:
+      - ./services/transport_service:/app
+
+    depends_on:
+      - postgres
+      - rabbitmq
 
 
   # reservation_service:
